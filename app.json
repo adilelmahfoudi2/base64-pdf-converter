@@ -1,0 +1,72 @@
+{
+  "expo": {
+    "name": "Base64 PDF Converter",
+    "slug": "base64-pdf-converter",
+    "version": "1.0.0",
+    "runtimeVersion": "1.0.0",
+    "owner": "medziyadelmahfoudi",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#667eea"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#667eea"
+      },
+      "package": "com.medziyad.base64pdfconverter",
+      "versionCode": 1,
+      "permissions": [
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ],
+      "config": {
+        "googleMobileAdsAppId": "ca-app-pub-9220833502282451~4307270388"
+      }
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.medziyad.base64pdfconverter",
+      "config": {
+        "googleMobileAdsAppId": "ca-app-pub-9220833502282451~4307270388"
+      }
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "buildToolsVersion": "35.0.0",
+            "kotlinVersion": "1.9.25"
+          }
+        }
+      ],
+      [
+        "expo-document-picker",
+        {
+          "iCloudContainerEnvironment": "Production"
+        }
+      ],
+      "expo-file-system",
+      "expo-sharing",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-9220833502282451~4307270388",
+          "iosAppId": "ca-app-pub-9220833502282451~4307270388"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "your-project-id"
+      }
+    }
+  }
+}
