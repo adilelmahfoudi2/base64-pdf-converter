@@ -9,7 +9,7 @@ const BannerAd = ({ style }) => {
   const { colors } = useTheme();
   const [adError, setAdError] = useState(false);
 
-  const adUnitId = __DEV__ ? TestIds.BANNER : AdService.getBannerAdUnitId();
+  const adUnitId = AdService.getBannerAdUnitId();
 
   if (adError) {
     return null;

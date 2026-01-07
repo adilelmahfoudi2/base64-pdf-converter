@@ -6,9 +6,7 @@ import {
 } from 'react-native-google-mobile-ads';
 import { AdService } from '../services/AdService';
 
-const adUnitId = __DEV__
-  ? TestIds.INTERSTITIAL
-  : AdService.getInterstitialAdUnitId();
+const adUnitId = AdService.getInterstitialAdUnitId();
 
 const interstitial = InterstitialAd.createForAdRequest(adUnitId, {
   requestNonPersonalizedAdsOnly: true,

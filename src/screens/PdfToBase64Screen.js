@@ -7,10 +7,13 @@ import {
   Alert,
   TouchableOpacity,
   Platform,
+  Share,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -99,11 +102,57 @@ const PdfToBase64Screen = ({ navigation }) => {
     if (!base64Result?.base64) return;
 
     try {
-      await Clipboard.setStringAsync(base64Result.base64);
+      const textToCopy = base64Result.base64;
+      
+      // For large text, use Share API instead of clipboard
+      if (textToCopy.length > 500000) {
+        Alert.alert(
+          'Large Text',
+          'This Base64 is too large for clipboard. Would you like to share it instead?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Share',
+              onPress: () => handleShareText(),
+            },
+          ]
+        );
+        return;
+      }
+      
+      await Clipboard.setStringAsync(textToCopy);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(t('copiedToClipboard'));
     } catch (err) {
-      Alert.alert('Error', 'Failed to copy to clipboard');
+      console.error('Copy error:', err);
+      // Fallback to Share API
+      handleShareText();
+    }
+  };
+
+  const handleShareText = async () => {
+    if (!base64Result?.base64) return;
+
+    try {
+      // For large text, save to file and share the file
+      const fileName = selectedFile?.name?.replace('.pdf', '') || 'base64_output';
+      const filePath = `${FileSystem.cacheDirectory}${fileName}_base64.txt`;
+      
+      await FileSystem.writeAsStringAsync(filePath, base64Result.base64);
+      
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(filePath, {
+          mimeType: 'text/plain',
+          dialogTitle: 'Share Base64 Text',
+        });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        Alert.alert('Error', 'Sharing is not available on this device');
+      }
+    } catch (err) {
+      console.error('Share error:', err);
+      Alert.alert('Error', 'Failed to share text');
     }
   };
 
@@ -112,11 +161,52 @@ const PdfToBase64Screen = ({ navigation }) => {
 
     try {
       const withPrefix = `data:application/pdf;base64,${base64Result.base64}`;
+      
+      // For large text, save to file and share
+      if (withPrefix.length > 500000) {
+        const fileName = selectedFile?.name?.replace('.pdf', '') || 'base64_output';
+        const filePath = `${FileSystem.cacheDirectory}${fileName}_uri.txt`;
+        
+        await FileSystem.writeAsStringAsync(filePath, withPrefix);
+        await Sharing.shareAsync(filePath, {
+          mimeType: 'text/plain',
+          dialogTitle: 'Share Base64 with URI',
+        });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        return;
+      }
+      
       await Clipboard.setStringAsync(withPrefix);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(t('copiedToClipboard'), 'Copied with data URI prefix');
     } catch (err) {
-      Alert.alert('Error', 'Failed to copy to clipboard');
+      console.error('Copy error:', err);
+      Alert.alert('Error', 'Failed to copy or share text');
+    }
+  };
+
+  const handleSaveAsFile = async () => {
+    if (!base64Result?.base64) return;
+
+    try {
+      const fileName = selectedFile?.name?.replace('.pdf', '') || 'base64_output';
+      const filePath = `${FileSystem.cacheDirectory}${fileName}.txt`;
+      
+      await FileSystem.writeAsStringAsync(filePath, base64Result.base64);
+      
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(filePath, {
+          mimeType: 'text/plain',
+          dialogTitle: 'Save Base64 Text',
+        });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        Alert.alert('Error', 'Sharing is not available on this device');
+      }
+    } catch (err) {
+      console.error('Save error:', err);
+      Alert.alert('Error', 'Failed to save file');
     }
   };
 
@@ -255,9 +345,27 @@ const PdfToBase64Screen = ({ navigation }) => {
                 style={styles.actionBtn}
               />
               <GradientButton
+                title={t('share')}
+                icon="share-outline"
+                onPress={handleShareText}
+                size="small"
+                style={styles.actionBtn}
+              />
+            </View>
+
+            <View style={styles.resultActions}>
+              <GradientButton
                 title="Copy with URI"
                 icon="link-outline"
                 onPress={handleCopyWithPrefix}
+                variant="outline"
+                size="small"
+                style={styles.actionBtn}
+              />
+              <GradientButton
+                title="Convert to PDF"
+                icon="document-outline"
+                onPress={() => navigation.navigate('Base64ToPdf', { base64Data: base64Result.base64 })}
                 size="small"
                 style={styles.actionBtn}
               />

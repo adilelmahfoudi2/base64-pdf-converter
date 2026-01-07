@@ -1,16 +1,16 @@
 {
   "expo": {
     "name": "Base64 PDF Converter",
-    "slug": "base64-pdf-converter",
+    "slug": "base64-to-pdf",
     "version": "1.0.0",
     "runtimeVersion": "1.0.0",
-    "owner": "medziyadelmahfoudi",
+    "owner": "adilmahfoudi",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/splash.png",
-      "resizeMode": "contain",
+      "resizeMode": "cover",
       "backgroundColor": "#667eea"
     },
     "android": {
@@ -24,16 +24,51 @@
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE"
       ],
-      "config": {
-        "googleMobileAdsAppId": "ca-app-pub-9220833502282451~4307270388"
-      }
+      "intentFilters": [
+        {
+          "action": "android.intent.action.VIEW",
+          "category": ["android.intent.category.DEFAULT", "android.intent.category.BROWSABLE"],
+          "data": [
+            {
+              "scheme": "file",
+              "mimeType": "text/plain"
+            },
+            {
+              "scheme": "content",
+              "mimeType": "text/plain"
+            },
+            {
+              "scheme": "file",
+              "mimeType": "*/*",
+              "pathPattern": ".*\\.txt"
+            },
+            {
+              "scheme": "content",
+              "mimeType": "*/*",
+              "pathPattern": ".*\\.txt"
+            }
+          ]
+        },
+        {
+          "action": "android.intent.action.SEND",
+          "category": ["android.intent.category.DEFAULT"],
+          "data": [
+            {
+              "mimeType": "text/plain"
+            },
+            {
+              "mimeType": "application/octet-stream"
+            },
+            {
+              "mimeType": "*/*"
+            }
+          ]
+        }
+      ]
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.medziyad.base64pdfconverter",
-      "config": {
-        "googleMobileAdsAppId": "ca-app-pub-9220833502282451~4307270388"
-      }
+      "bundleIdentifier": "com.medziyad.base64pdfconverter"
     },
     "plugins": [
       [
@@ -53,8 +88,6 @@
           "iCloudContainerEnvironment": "Production"
         }
       ],
-      "expo-file-system",
-      "expo-sharing",
       [
         "react-native-google-mobile-ads",
         {
@@ -65,7 +98,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "your-project-id"
+        "projectId": "30953471-6355-4ef0-8155-750c01bb754c"
       }
     }
   }

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useContext } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,15 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  InteractionManager,
+  Modal,
+  TouchableOpacity,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import { SharedFileContext } from '../../App';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import {
@@ -24,39 +30,172 @@ import { ConversionService } from '../services/ConversionService';
 import { HistoryService } from '../services/HistoryService';
 import { FontSizes, Spacing, BorderRadius } from '../constants/colors';
 
-const Base64ToPdfScreen = ({ navigation }) => {
+const MAX_DISPLAY_LENGTH = 1000; // Only show first 1000 chars in TextInput
+
+const Base64ToPdfScreen = ({ navigation, route }) => {
   const { colors } = useTheme();
   const { t } = useLanguage();
   const inputRef = useRef(null);
+  const sharedFileContext = useContext(SharedFileContext);
 
-  const [base64Input, setBase64Input] = useState('');
+  const [displayText, setDisplayText] = useState(''); // Text shown in TextInput
+  const fullTextRef = useRef(''); // Full text stored in ref (not state)
   const [fileName, setFileName] = useState('converted_file');
   const [isConverting, setIsConverting] = useState(false);
   const [convertedFile, setConvertedFile] = useState(null);
   const [error, setError] = useState('');
+  const [isPasting, setIsPasting] = useState(false);
+  const [textLength, setTextLength] = useState(0);
+  const [showUrlModal, setShowUrlModal] = useState(false);
+  const [urlInput, setUrlInput] = useState('');
 
-  const handlePaste = async () => {
+  // Handle incoming base64 data from PdfToBase64Screen
+  useEffect(() => {
+    if (route?.params?.base64Data) {
+      const text = route.params.base64Data;
+      fullTextRef.current = text;
+      setTextLength(text.length);
+      
+      const truncated = text.length > MAX_DISPLAY_LENGTH 
+        ? text.substring(0, MAX_DISPLAY_LENGTH) + '...' 
+        : text;
+      setDisplayText(truncated);
+    }
+  }, [route?.params?.base64Data]);
+
+  // Handle shared file content from other apps
+  useEffect(() => {
+    if (sharedFileContext?.sharedFileContent) {
+      const text = sharedFileContext.sharedFileContent;
+      fullTextRef.current = text;
+      setTextLength(text.length);
+      
+      const truncated = text.length > MAX_DISPLAY_LENGTH 
+        ? text.substring(0, MAX_DISPLAY_LENGTH) + '...' 
+        : text;
+      setDisplayText(truncated);
+      
+      // Clear the shared content
+      sharedFileContext.setSharedFileContent(null);
+      
+      Alert.alert('File Received', `Loaded ${text.length.toLocaleString()} characters from shared file`);
+    }
+  }, [sharedFileContext?.sharedFileContent]);
+
+  const handlePaste = useCallback(async () => {
     try {
+      setIsPasting(true);
       const text = await Clipboard.getStringAsync();
       if (text) {
-        setBase64Input(text);
+        // Store full text in ref
+        fullTextRef.current = text;
+        setTextLength(text.length);
+        
+        // Only display truncated version
+        const truncated = text.length > MAX_DISPLAY_LENGTH 
+          ? text.substring(0, MAX_DISPLAY_LENGTH) + '...' 
+          : text;
+        
+        setDisplayText(truncated);
         setError('');
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
     } catch (err) {
       console.error('Paste error:', err);
+    } finally {
+      setIsPasting(false);
     }
-  };
+  }, []);
 
   const handleClear = () => {
-    setBase64Input('');
+    setDisplayText('');
+    fullTextRef.current = '';
+    setTextLength(0);
     setConvertedFile(null);
     setError('');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
+  const handleImportFromFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'text/plain',
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const file = result.assets[0];
+        const content = await FileSystem.readAsStringAsync(file.uri);
+        
+        if (content) {
+          // Clean the content (remove whitespace and newlines)
+          const cleanedContent = content.replace(/\s/g, '');
+          
+          fullTextRef.current = cleanedContent;
+          setTextLength(cleanedContent.length);
+          
+          const truncated = cleanedContent.length > MAX_DISPLAY_LENGTH 
+            ? cleanedContent.substring(0, MAX_DISPLAY_LENGTH) + '...' 
+            : cleanedContent;
+          
+          setDisplayText(truncated);
+          setError('');
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          Alert.alert('Success', `Imported ${cleanedContent.length.toLocaleString()} characters`);
+        }
+      }
+    } catch (err) {
+      console.error('Import error:', err);
+      Alert.alert('Error', 'Failed to import file');
+    }
+  };
+
+  const handleImportFromURL = () => {
+    setShowUrlModal(true);
+  };
+
+  const handleDownloadFromURL = async () => {
+    if (!urlInput || !urlInput.trim()) {
+      Alert.alert('Error', 'Please enter a valid URL');
+      return;
+    }
+    
+    try {
+      setIsPasting(true);
+      setShowUrlModal(false);
+      
+      const response = await fetch(urlInput.trim());
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch URL');
+      }
+      
+      const content = await response.text();
+      const cleanedContent = content.replace(/\s/g, '');
+      
+      fullTextRef.current = cleanedContent;
+      setTextLength(cleanedContent.length);
+      
+      const truncated = cleanedContent.length > MAX_DISPLAY_LENGTH 
+        ? cleanedContent.substring(0, MAX_DISPLAY_LENGTH) + '...' 
+        : cleanedContent;
+      
+      setDisplayText(truncated);
+      setError('');
+      setUrlInput('');
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Alert.alert('Success', `Downloaded ${cleanedContent.length.toLocaleString()} characters`);
+    } catch (err) {
+      console.error('URL import error:', err);
+      Alert.alert('Error', 'Failed to download from URL. Check the URL and try again.');
+    } finally {
+      setIsPasting(false);
+    }
+  };
+
   const handleConvert = async () => {
-    if (!base64Input.trim()) {
+    const textToConvert = fullTextRef.current || displayText;
+    if (!textToConvert.trim()) {
       setError(t('invalidBase64'));
       return;
     }
@@ -66,7 +205,7 @@ const Base64ToPdfScreen = ({ navigation }) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      const result = await ConversionService.base64ToPdf(base64Input, fileName);
+      const result = await ConversionService.base64ToPdf(textToConvert, fileName);
 
       if (result.success) {
         setConvertedFile(result);
@@ -149,6 +288,18 @@ const Base64ToPdfScreen = ({ navigation }) => {
                   size="small"
                 />
                 <ActionButton
+                  icon="document-text-outline"
+                  label="File"
+                  onPress={handleImportFromFile}
+                  size="small"
+                />
+                <ActionButton
+                  icon="cloud-download-outline"
+                  label="URL"
+                  onPress={handleImportFromURL}
+                  size="small"
+                />
+                <ActionButton
                   icon="trash-outline"
                   label={t('clear')}
                   onPress={handleClear}
@@ -168,17 +319,28 @@ const Base64ToPdfScreen = ({ navigation }) => {
                   borderColor: error ? colors.error : colors.border,
                 },
               ]}
-              value={base64Input}
+              value={displayText}
               onChangeText={(text) => {
-                setBase64Input(text);
+                // For manual typing, update both display and full text
+                setDisplayText(text);
+                fullTextRef.current = text;
+                setTextLength(text.length);
                 setError('');
               }}
+              editable={!isPasting}
+              scrollEnabled={true}
               placeholder={t('enterBase64')}
               placeholderTextColor={colors.textMuted}
               multiline
               numberOfLines={8}
               textAlignVertical="top"
             />
+
+            {textLength > MAX_DISPLAY_LENGTH && (
+              <Text style={[styles.infoText, { color: colors.primary }]}>
+                📋 Pasted {textLength.toLocaleString()} characters (showing preview)
+              </Text>
+            )}
 
             {error ? (
               <Text style={[styles.errorText, { color: colors.error }]}>
@@ -211,7 +373,7 @@ const Base64ToPdfScreen = ({ navigation }) => {
               icon="swap-horizontal"
               onPress={handleConvert}
               loading={isConverting}
-              disabled={!base64Input.trim()}
+              disabled={!displayText.trim() && !fullTextRef.current}
               style={styles.convertButton}
             />
           </Card>
@@ -262,6 +424,63 @@ const Base64ToPdfScreen = ({ navigation }) => {
           <BannerAd style={styles.adBanner} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* URL Import Modal */}
+      <Modal
+        visible={showUrlModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowUrlModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              Import from URL
+            </Text>
+            <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
+              Enter the URL of a text file containing Base64
+            </Text>
+            <TextInput
+              style={[
+                styles.urlInput,
+                {
+                  backgroundColor: colors.surfaceVariant,
+                  color: colors.text,
+                  borderColor: colors.border,
+                },
+              ]}
+              value={urlInput}
+              onChangeText={setUrlInput}
+              placeholder="https://example.com/base64.txt"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, { backgroundColor: colors.surfaceVariant }]}
+                onPress={() => {
+                  setShowUrlModal(false);
+                  setUrlInput('');
+                }}
+              >
+                <Text style={[styles.modalButtonText, { color: colors.text }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, { backgroundColor: colors.primary }]}
+                onPress={handleDownloadFromURL}
+              >
+                <Text style={[styles.modalButtonText, { color: '#fff' }]}>
+                  Download
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -308,6 +527,11 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: FontSizes.sm,
     marginTop: Spacing.xs,
+  },
+  infoText: {
+    fontSize: FontSizes.sm,
+    marginTop: Spacing.xs,
+    fontWeight: '500',
   },
   fileNameContainer: {
     marginTop: Spacing.md,
@@ -363,6 +587,49 @@ const styles = StyleSheet.create({
   },
   adBanner: {
     marginTop: Spacing.lg,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.lg,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+  },
+  modalTitle: {
+    fontSize: FontSizes.lg,
+    fontWeight: '600',
+    marginBottom: Spacing.xs,
+  },
+  modalSubtitle: {
+    fontSize: FontSizes.sm,
+    marginBottom: Spacing.md,
+  },
+  urlInput: {
+    borderRadius: BorderRadius.md,
+    borderWidth: 2,
+    padding: Spacing.md,
+    fontSize: FontSizes.md,
+    marginBottom: Spacing.md,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  modalButton: {
+    flex: 1,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+  },
+  modalButtonText: {
+    fontSize: FontSizes.md,
+    fontWeight: '600',
   },
 });
 

@@ -5,7 +5,7 @@ import { Strings } from '../constants/strings';
 const LanguageContext = createContext();
 
 export const LanguageProvider = ({ children }) => {
-  const [language, setLanguage] = useState('ar');
+  const [language, setLanguage] = useState('en');
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
